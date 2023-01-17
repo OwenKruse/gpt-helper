@@ -1,10 +1,10 @@
 {
 	"id": "obsidian-sample-plugin",
-	"name": "Sample Plugin",
+	"name": "Chat-GPT Copilot",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "This is a sample plugin for Obsidian. This plugin demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
+	"description": "This plugin adds integration from Chat-GPT text completion into Obsidian",
+	"author": "Owen Kruse",
 	"authorUrl": "https://obsidian.md",
 	"fundingUrl": "https://obsidian.md/pricing",
 	"isDesktopOnly": false
