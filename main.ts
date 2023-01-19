@@ -1,86 +1,26 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import {
+	Platform,
+	Plugin,
+	EditorSuggest,
+	Editor,
+	EditorPosition,
+	TFile,
+	EditorSuggestTriggerInfo,
+	EditorSuggestContext,
+	App
+} from 'obsidian';
+import { DEFAULT_SETTINGS, PluginSettings, ChatGptSettings } from './settings';
 
-// Remember to rename these classes and interfaces!
 
-interface MyPluginSettings {
-	mySetting: string;
-}
-
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
-
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
-
+export default class ChatGPTHelper extends Plugin {
+	settings: PluginSettings;
 	async onload() {
 		await this.loadSettings();
-
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
-
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-			}
-		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-	}
-
-	onunload() {
+		this.addSettingTab(new ChatGptSettings(this.app, this));
+		this.registerEditorSuggest(new ChatGptHelper(this));
 
 	}
+
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
@@ -89,49 +29,106 @@ export default class MyPlugin extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
+
+
+
 }
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
+class ChatGptHelper extends EditorSuggest<string> {
+	plugin: ChatGPTHelper;
+	app: App;
 
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
 
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
 
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
-
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
+	constructor(plugin: ChatGPTHelper) {
+		super(plugin.app);
 		this.plugin = plugin;
 	}
 
-	display(): void {
-		const {containerEl} = this;
+	onTrigger(cursor: EditorPosition, editor: Editor, _: TFile): EditorSuggestTriggerInfo | null {
+		if (this.plugin.settings.suggester) {
+			let title = this.app.workspace.getActiveFile()?.basename;
+			let line = editor.getLine(cursor.line);
+			try {
+				line = editor.getLine(cursor.line - 1) + '\n' + line;
+			}
+			catch (error) {
+			}
+			try {
+				line = editor.getLine(cursor.line - 2) + '\n' + line;
+			}
+			catch (error) {
+			}
+			line = "Title: " + title + "\n" + line;
+			if (line.substring(line.length - this.plugin.settings.hotkey.length) === this.plugin.settings.hotkey) {
+				//Remove the hotkey from the line and replace it with loading text
+				line = line.substring(0, line.length - this.plugin.settings.hotkey.length);
+				return {
+					start: { line: cursor.line, ch: cursor.ch},
+					end: { line: cursor.line, ch: cursor.ch },
+					query: line,
+				};
 
-		containerEl.empty();
+			}
+		}
+		return null;
+	}
 
-		containerEl.createEl('h2', {text: 'Settings for my awesome plugin.'});
 
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					console.log('Secret: ' + value);
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
+	async getSuggestions(context: EditorSuggestContext): Promise<string[]> {
+		// Display loading in the status bar
+		const status = this.plugin.addStatusBarItem();
+		status.setText("Loading...");
+
+
+		let suggestions: string[] = [];
+		try {
+			let search = context.query;
+			console.log(search);
+			// Use openAi to generate suggestions
+			const requestOptions = {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Authorization': 'Bearer ' + String(this.plugin.settings.openAiKey)
+				},
+				body: JSON.stringify({
+					'prompt': search,
+					'temperature': 0.5,
+					'max_tokens': 100,
+					'top_p': 1,
+					'frequency_penalty': 0.5,
+					'presence_penalty': 0.5,
+					'stop': ["\"\"\""],
+				})
+			};
+			const response = await fetch('https://api.openai.com/v1/engines/text-curie-001/completions', requestOptions)
+				.then(response => response.json())
+				.then(data => {
+					console.log(data);
+					suggestions.push(data.choices[0].text)
+				}).catch(err => {
+				console.log("Ran out of tokens for today! Try tomorrow!");
+			});
+		} catch (error) {
+			console.log(`An error occurred in getSuggestions: ${error}`);
+		}
+		status.remove();
+		return suggestions;
+
+	}
+
+	renderSuggestion(suggestion: string, el: HTMLElement): void {
+		el.setText(suggestion);
+	}
+
+	selectSuggestion(suggestion: string): void {
+		if (this.context) {
+			(this.context.editor as Editor).replaceRange(suggestion, this.context.start, this.context.end);
+			// Delete the hotkey from the end of the line
+			(this.context.editor as Editor).replaceRange("", { line: this.context.start.line, ch: this.context.start.ch - this.plugin.settings.hotkey.length }, this.context.start);
+			// Move the cursor to the end of the line
+			(this.context.editor as Editor).setCursor({ line: this.context.start.line, ch: this.context.start.ch + suggestion.length - this.plugin.settings.hotkey.length });
+		}
 	}
 }
