@@ -108,7 +108,7 @@ class ChatGptHelper extends EditorSuggest<string> {
 					console.log(data);
 					suggestions.push(data.choices[0].text)
 				}).catch(err => {
-				console.log("Ran out of tokens for today! Try tomorrow!");
+					console.error(err + " " + this.plugin.settings.openAiKey + " " + search + " " + requestOptions.body + " " + requestOptions.headers.Authorization);
 			});
 		} catch (error) {
 			console.log(`An error occurred in getSuggestions: ${error}`);
