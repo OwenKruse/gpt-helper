@@ -50,7 +50,6 @@ export class ChatGptSettings extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName('Hotkey')
 			.setDesc('Enter the hotkey to trigger the plugin')
-			// Make sure the key is a single character
 			.addText(text => text
 				.setPlaceholder('Hotkey')
 				.setValue(this.plugin.settings.hotkey)
